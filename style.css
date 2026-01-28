@@ -1,75 +1,46 @@
 :root {
-    --bg-color: #020202;
-    --primary: #20c20e;
-    --warning: #d4ce18;
-    --danger: #ff1a1a;
-    --font-main: 'Courier New', Courier, monospace;
+    --primary: #20c20e; /* Начальный зеленый */
+    --bg: #050505;
 }
 
 body {
-    margin: 0; background-color: var(--bg-color);
-    color: var(--primary); font-family: var(--font-main);
-    overflow: hidden; height: 100vh;
-    display: flex; justify-content: center; align-items: center;
-    user-select: none;
-}
-
-#scan-lines {
-    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-    background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.2));
-    background-size: 100% 4px; pointer-events: none; z-index: 10;
+    margin: 0; background: var(--bg); color: var(--primary);
+    font-family: 'Courier New', monospace; overflow: hidden;
+    display: flex; justify-content: center; align-items: center; height: 100vh;
 }
 
 #vignette {
-    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-    background: radial-gradient(circle, transparent 50%, black 100%);
-    z-index: 11; pointer-events: none;
+    position: fixed; width: 100vw; height: 100vh;
+    background: radial-gradient(circle, transparent 40%, black 120%);
+    pointer-events: none; z-index: 10;
 }
-
-#boot-sequence { position: absolute; width: 80%; max-width: 600px; z-index: 100; }
-.terminal-font { font-size: 1.2rem; line-height: 1.5; white-space: pre-wrap; text-shadow: 0 0 5px var(--primary); }
 
 #containment-unit {
-    width: 500px; border: 1px solid var(--primary); padding: 20px;
-    background: rgba(0,0,0,0.9); z-index: 20; transition: all 1s;
+    width: 520px; padding: 20px; border: 1px solid var(--primary);
+    background: rgba(0,0,0,0.9); box-shadow: 0 0 20px rgba(0,0,0,0.5);
 }
+
+.canvas-wrap { position: relative; border: 1px solid #111; margin: 15px 0; background: #000; }
+canvas { display: block; width: 100%; }
+
+#scan-line {
+    position: absolute; width: 100%; height: 1px; background: rgba(255,255,255,0.1);
+    top: 0; animation: scan 4s infinite linear;
+}
+
+@keyframes scan { 100% { top: 100%; } }
+
+#message-log {
+    height: 40px; border-top: 1px dashed var(--primary);
+    padding: 10px; font-size: 0.9rem; margin-bottom: 15px;
+}
+
+#power-node {
+    width: 100%; padding: 15px; background: transparent;
+    border: 1px solid var(--primary); color: var(--primary);
+    font-family: inherit; font-size: 1.2rem; cursor: pointer;
+}
+
+#power-node:hover { background: var(--primary); color: #000; }
 
 .hidden { display: none !important; }
-
-header { display: flex; justify-content: space-between; border-bottom: 1px dashed var(--primary); padding-bottom: 10px; margin-bottom: 20px; }
-
-.canvas-container { position: relative; background: #000; margin-bottom: 20px; border: 1px solid #111; }
-canvas { width: 100%; display: block; }
-
-#bio-scan-line {
-    position: absolute; top: 0; left: 0; width: 100%; height: 2px;
-    background: var(--danger); box-shadow: 0 0 10px var(--danger);
-    animation: scan 2s infinite linear;
-}
-
-@keyframes scan { 0% { top: 0; } 100% { top: 100%; } }
-
-.neuro-btn {
-    width: 100%; padding: 15px; background: #000; border: 1px solid var(--primary);
-    color: var(--primary); font-family: var(--font-main); font-size: 1.2rem; cursor: crosshair;
-}
-
-.neuro-btn:hover { background: var(--primary); color: #000; }
-
-#reality-failure {
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background: #000082; color: #fff; z-index: 999; padding: 50px; font-size: 1.5rem;
-}
-
-.burn-out { animation: burnOut 3s forwards; }
-@keyframes burnOut {
-    0% { filter: brightness(1); }
-    50% { filter: brightness(10) hue-rotate(180deg); transform: scale(1.1); }
-    100% { filter: brightness(0); transform: scale(0); opacity: 0; }
-}
-
-/* Статусы профиля */
-.stable { color: var(--primary); }
-.anxious { color: var(--warning); text-shadow: 0 0 5px var(--warning); }
-.critical { color: var(--danger); text-shadow: 0 0 10px var(--danger); animation: blink 0.5s infinite; }
-@keyframes blink { 50% { opacity: 0; } }
