@@ -1,52 +1,54 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KETTLE.EXE</title>
+    <title>KETTLE_SYS</title>
     <link rel="stylesheet" href="style.css">
-    <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo="> </head>
+    <link rel="icon" href="data:;base64,iVBORw0KGgo=">
+</head>
 <body>
-    
-    <div class="crt-lines"></div>
-    <div class="vignette"></div>
 
-    <div class="container">
+    <div id="scan-lines"></div>
+    <div id="vignette"></div>
+    <div id="noise-overlay"></div>
+
+    <div id="boot-sequence">
+        <div id="boot-text" class="terminal-font"></div>
+        <div id="boot-cursor" class="blink">_</div>
+    </div>
+
+    <div id="containment-unit" class="hidden">
         <header>
-            <div id="sys-time">00:00:00</div>
-            <div id="cycle-display">CYCLE: <span id="cycle-val">0x00</span></div>
+            <div class="meta-data">
+                <span id="session-id">SESSION: <span id="sess-val">01</span></span>
+                <span id="sys-time">00:00:00</span>
+            </div>
+            <div id="profile-block">
+                STATUS: <span id="user-profile" class="stable">NEUROTYPICAL</span>
+            </div>
         </header>
 
         <main>
-            <div class="canvas-wrapper">
-                <canvas id="kettle-screen" width="480" height="480"></canvas>
-                <div id="glitch-overlay"></div>
+            <div class="canvas-container">
+                <canvas id="bio-screen" width="500" height="500"></canvas>
+                <div id="visual-glitch"></div>
+                <div id="bio-scan-line" class="hidden"></div>
             </div>
             
+            <div class="status-feed">
+                <div id="log-feed">>> SYSTEM READY. AWAITING INPUT.</div>
+            </div>
+
             <div class="controls">
-                <div id="status-line">>> WAITING FOR INPUT_</div>
-                <button id="pwr-btn" class="brutal-btn">[ I/O ]</button>
+                <button id="interaction-node" class="neuro-btn">[ INITIATE ]</button>
             </div>
         </main>
     </div>
 
-    <div id="modal-overlay" class="hidden">
-        <div class="modal-box">
-            <p>>> WARNING: THERMAL CRITICALITY</p>
-            <p>ТЫ ЖЕ НЕ ХОЧЕШЬ, ЧТОБЫ ОН ОСТЫЛ?</p>
-            <div class="modal-btns">
-                <button id="stay-btn">[ STAY ]</button>
-                <button id="leave-btn" disabled>[ ... ]</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="boot-screen">
-        <div class="boot-text">
-            <p>INITIALIZING KETTLE_SYS...</p>
-            <p>LOADING DRIVERS...</p>
-            <p class="blink">>> CLICK TO MOUNT SYSTEM <<</p>
-        </div>
+    <div id="reality-failure" class="hidden">
+        <p>SYSTEM_THREAD_EXCEPTION_NOT_HANDLED (ktl.sys)</p>
+        <p>Fatal Error: User Reality Desynchronized</p>
     </div>
 
     <script src="script.js"></script>
