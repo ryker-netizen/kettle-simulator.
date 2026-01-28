@@ -1,32 +1,55 @@
-/* KETTLE.EXE V2.0 - PSYCHOLOGICAL AUDIT PROTOCOL */
+/* KETTLE.EXE V3.0 - THE MIRROR UPDATE 
+   CONTAINS: BIO-FEEDBACK, WEBCAM REFLECTION, PROCEDURAL HORROR
+*/
 
 const CONFIG = {
-    titles: ["KETTLE.EXE", "DON'T LOOK", "IT'S COOLING", "YOU ARE HERE", "⠀"],
+    titles: ["KETTLE.EXE", "DON'T LOOK", "IT'S COOLING", "YOU ARE HERE", "⠀", "RUN"],
     bootText: `>> LOADING KTL_OS...
 >> WARNING: ENTITY DETECTED IN CONTAINMENT PROTOCOL.
 >> THIS IS NOT A SIMULATION.
 >> THIS IS A CONTAINMENT VESSEL.
->> THE KETTLE HOLDS WHAT BOILS WITHIN.
->> DO NOT LET IT COOL.
+>> CONNECTING TO OPTICAL SENSORS...
 >> ...
->> CLICK TO ASSUME CONTROL (AND RESPONSIBILITY).`
+>> CLICK TO ASSUME CONTROL.`
 };
 
 const STATE = {
     session: 1,
     isOn: false,
     temp: 20,
-    chaos: 0, // 0-100
-    heartRate: 0, // Fake BPM
+    chaos: 0, 
+    heartRate: 0, 
     startTime: Date.now(),
     act: 0, // 0:Boot, 1:Normal, 2:Audit, 3:Symbiosis, 4:Final
     angle: 0,
     clicks: 0,
     profile: "NEUROTYPICAL",
-    resignationTimer: 0
+    resignationTimer: 0,
+    webcamActive: false,
+    stream: null
 };
 
-// --- AUDIO ENGINE (Procedural Horror) ---
+// --- WEBCAM SYSTEM (THE MIRROR) ---
+const videoElement = document.createElement('video');
+videoElement.autoplay = true;
+videoElement.style.display = 'none'; // Hidden, used only for texture
+document.body.appendChild(videoElement);
+
+async function tryActivateWebcam() {
+    try {
+        observer.comment(">> ACCESSING OPTICAL FEED...");
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        videoElement.srcObject = stream;
+        STATE.stream = stream;
+        STATE.webcamActive = true;
+        observer.comment(">> I SEE YOU NOW.");
+    } catch (e) {
+        observer.comment(">> CAMERA BLOCKED. I STILL SEE YOU.");
+        STATE.webcamActive = false; // Fallback to Shadow Face
+    }
+}
+
+// --- AUDIO ENGINE ---
 class AudioEngine {
     constructor() {
         this.ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -39,25 +62,32 @@ class AudioEngine {
     }
 
     startHum() {
-        // Deep 50Hz mains hum + sub-bass fear freq
+        // Complex Drone
         this.humOsc = this.ctx.createOscillator();
         this.humOsc.type = 'sawtooth';
         this.humOsc.frequency.value = 50;
         
         const lowOsc = this.ctx.createOscillator();
         lowOsc.type = 'sine';
-        lowOsc.frequency.value = 18; // Infrasound range
+        lowOsc.frequency.value = 18; // Infrasound
+
+        // Binaural beat layer
+        const binaural = this.ctx.createOscillator();
+        binaural.type = 'sine';
+        binaural.frequency.value = 54; // 4hz diff
 
         const gain = this.ctx.createGain();
         gain.gain.value = 0.1;
         
         this.humOsc.connect(gain);
         lowOsc.connect(gain);
+        binaural.connect(gain);
         gain.connect(this.master);
         
         this.humOsc.start();
         lowOsc.start();
-        this.humRef = { osc: this.humOsc, low: lowOsc, gain: gain };
+        binaural.start();
+        this.humRef = { osc: this.humOsc, low: lowOsc, bin: binaural, gain: gain };
     }
 
     startBoil() {
@@ -89,33 +119,37 @@ class AudioEngine {
         if(this.heartOsc) return;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
-        osc.frequency.value = 40; // Low thud
+        osc.frequency.value = 40; 
         osc.connect(gain);
         gain.connect(this.master);
         osc.start();
         
         const interval = 60000 / bpm;
         this.heartInterval = setInterval(() => {
-            gain.gain.setValueAtTime(0.5, this.ctx.currentTime);
+            gain.gain.setValueAtTime(0.6, this.ctx.currentTime);
             gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.15);
         }, interval);
     }
 
     stopAll() {
-        if(this.humRef) { this.humRef.osc.stop(); this.humRef.low.stop(); }
-        if(this.boilRef) { this.boilRef.node.stop(); }
+        if(this.humRef) { 
+            try { this.humRef.osc.stop(); this.humRef.low.stop(); this.humRef.bin.stop(); } catch(e){}
+        }
+        if(this.boilRef) { 
+            try { this.boilRef.node.stop(); } catch(e){}
+        }
         if(this.heartInterval) clearInterval(this.heartInterval);
     }
 }
 
-// --- SHADOW OBSERVER (AI Logic) ---
+// --- SHADOW OBSERVER ---
 class ShadowObserver {
     constructor() {
         this.clickHistory = [];
         this.lastAction = Date.now();
         this.hesitationTriggered = false;
         
-        // Persistent Memory Check
+        // Persistent Memory
         const saved = localStorage.getItem('kettle_profile');
         if(saved) {
             const data = JSON.parse(saved);
@@ -134,24 +168,28 @@ class ShadowObserver {
         STATE.clicks++;
         this.hesitationTriggered = false;
         
-        // Analyze Patterns
-        if(delta < 200) this.comment(">> ADRENALINE DETECTED.");
-        
+        if(delta < 200 && STATE.act < 3) this.comment(">> ADRENALINE DETECTED.");
         this.save();
+        
+        // Final Trigger Check
+        if (STATE.clicks >= 666 || (STATE.session > 13 && STATE.act !== 4)) {
+            triggerTheEnd();
+        }
     }
 
     checkIdle() {
         const idleTime = Date.now() - this.lastAction;
         
-        // Resignation trigger for Finale
+        // Act 3 Idle punishment
         if (STATE.act >= 3 && STATE.isOn && idleTime > 30000) {
             STATE.resignationTimer++;
-            if (STATE.resignationTimer > 1000) triggerFinale(); // Approx 15s in loop
+            if (STATE.resignationTimer > 800) triggerTheEnd(); 
         }
 
         if(idleTime > 10000 && !this.hesitationTriggered && STATE.act < 4) {
             this.hesitationTriggered = true;
-            this.comment(Math.random() > 0.5 ? ">> WHY ARE YOU WAITING?" : ">> I CAN WAIT FOREVER.");
+            const msgs = [">> WHY ARE YOU WAITING?", ">> I CAN WAIT FOREVER.", ">> THE WATER GROWS IMPATIENT."];
+            this.comment(msgs[Math.floor(Math.random()*msgs.length)]);
         }
     }
 
@@ -169,7 +207,7 @@ class ShadowObserver {
         const feed = document.getElementById('log-feed');
         feed.innerText = text;
         feed.style.opacity = 1;
-        // Text glitch effect
+        // Glitch text
         setTimeout(() => feed.style.opacity = 0.5, 100);
         setTimeout(() => feed.style.opacity = 1, 200);
     }
@@ -183,14 +221,15 @@ class ShadowObserver {
     }
 }
 
-// --- MAIN INIT ---
+// --- INIT & CORE ---
 const audio = new AudioEngine();
 const observer = new ShadowObserver();
 const canvas = document.getElementById('bio-screen');
 const ctx = canvas.getContext('2d');
+const btn = document.getElementById('interaction-node');
 let loopId;
 
-// Boot Sequence
+// Boot
 const bootEl = document.getElementById('boot-text');
 let bootIdx = 0;
 
@@ -212,9 +251,9 @@ function startSession() {
     STATE.act = 1;
     observer.updateProfile();
     
-    // Check if "cleansed"
+    // Check cleanse attempt
     if(localStorage.getItem('kettle_profile')) {
-        observer.comment(">> DATA RESTORED FROM BACKUP.");
+        observer.comment(">> DATA RESTORED. YOU CANNOT FORGET.");
     }
 
     gameLoop();
@@ -224,146 +263,181 @@ function startSession() {
         glitchTabTitle();
     }, 1000);
     
-    // Window Focus Tracking
-    window.onblur = () => {
-        if(STATE.act > 1) observer.comment(">> ESCAPE ATTEMPT NOTED.");
-    };
-    
-    // Prevent Close
+    window.onblur = () => { if(STATE.act > 1) observer.comment(">> WHERE ARE YOU GOING?"); };
     window.onbeforeunload = (e) => {
-        if(STATE.session > 2) {
-            e.preventDefault();
-            return "THE VESSEL MUST NOT COOL.";
-        }
+        if(STATE.session > 2) { e.preventDefault(); return "IT'S NOT FINISHED."; }
     };
 }
 
-// --- GAME LOOP ---
+// --- LOOP ---
 function gameLoop() {
-    if(STATE.act === 4) return; // Finale stops loop
+    if(STATE.act === 4) return;
 
     ctx.fillStyle = '#050505';
     ctx.fillRect(0,0,500,500);
 
     drawNoise();
-    drawKettle();
+    drawRealisticKettle(); // THE NEW RENDERER
     
-    // Physics & Progression
     if(STATE.isOn) {
         STATE.temp += 0.3 + (STATE.chaos * 0.02);
         
-        // Audio modulation
         if(audio.boilRef) {
             const vol = Math.min((STATE.temp - 20)/100, 1);
             audio.boilRef.gain.gain.value = vol;
             audio.boilRef.filter.frequency.value = 200 + (STATE.temp * 15);
         }
 
-        if(STATE.temp >= 100) {
-            cycleComplete();
-        }
+        if(STATE.temp >= 100) cycleComplete();
     } else {
         if(STATE.temp > 20) STATE.temp -= 0.5;
     }
 
-    // Act 2: Bio-Scan Event
-    if(STATE.session === 5 && !STATE.heartRate && STATE.isOn) {
-        triggerBioScan();
+    // ACT TRIGGERS
+    if(STATE.session > 5 && !STATE.heartRate && STATE.isOn) triggerBioScan();
+    
+    // Trigger Webcam Request at Session 8
+    if(STATE.session === 8 && !STATE.webcamActive && STATE.isOn) {
+        tryActivateWebcam();
     }
 
-    // Act 3: Turning
+    // Act 3 Turn
     if(STATE.session > 10) {
         STATE.act = 3;
-        if(STATE.angle < 1) STATE.angle += 0.001;
+        if(STATE.angle < 1) STATE.angle += 0.0008;
     }
 
-    // Random BSOD
-    if(STATE.chaos > 50 && Math.random() < 0.001) {
-        triggerBSOD();
-    }
+    if(STATE.chaos > 50 && Math.random() < 0.002) triggerBSOD();
 
     loopId = requestAnimationFrame(gameLoop);
 }
 
-// --- RENDERER ---
-function drawKettle() {
+// --- THE NEW RENDERER (PHOTOREALISM + REFLECTIONS) ---
+function drawRealisticKettle() {
     const cx = 250;
     const cy = 250;
-    
-    // Calculate wobble based on heat
-    const wobble = STATE.isOn ? (Math.random() - 0.5) * (STATE.temp/20) : 0;
+    const t = STATE.temp;
+    const shake = t > 80 ? (Math.random() - 0.5) * (t / 40) : 0;
     
     ctx.save();
-    ctx.translate(cx + wobble, cy);
-    
-    // The Container
-    ctx.fillStyle = '#222';
-    ctx.fillRect(-60, -80, 120, 140);
-    
-    // Metallic Texture
-    ctx.fillStyle = STATE.act > 2 ? '#3a0000' : '#444'; // Turns red/flesh in later acts
-    ctx.fillRect(-50, -70, 100, 80);
+    ctx.translate(cx + shake, cy + shake);
 
-    // Spout (The Turning Logic)
-    // Normal: x=60. Turned: x=0 (Center)
-    const spoutX = 60 - (STATE.angle * 60);
-    const spoutW = 40 - (STATE.angle * 20);
+    // -- 1. MAIN BODY (Detailed) --
+    const bodyGrad = ctx.createLinearGradient(-70, 0, 70, 0);
+    bodyGrad.addColorStop(0, '#0a0a0a'); // Dark edge
+    bodyGrad.addColorStop(0.2, '#333');   // Highlight
+    bodyGrad.addColorStop(0.5, '#1a1a1a'); // Center
+    bodyGrad.addColorStop(0.8, '#333');   // Highlight
+    bodyGrad.addColorStop(1, '#050505');  // Dark edge
     
-    ctx.fillStyle = '#555';
-    ctx.fillRect(spoutX, -30, spoutW, 10 + (STATE.angle*10));
+    ctx.fillStyle = bodyGrad;
+    ctx.beginPath();
+    ctx.moveTo(-60, -90); // Top left
+    ctx.lineTo(60, -90);  // Top right
+    ctx.quadraticCurveTo(80, 0, 70, 90); // Right curve
+    ctx.lineTo(-70, 90);  // Bottom
+    ctx.quadraticCurveTo(-80, 0, -60, -90); // Left curve
+    ctx.closePath();
+    ctx.fill();
 
-    // The Void Hole (Only visible if turned)
-    if(STATE.angle > 0.8) {
+    // -- 2. THE REFLECTION (WEBCAM or SHADOW) --
+    // We clip the drawing to the body shape
+    ctx.save();
+    ctx.clip(); 
+    
+    if (STATE.webcamActive && videoElement.readyState === 4) {
+        // Draw user face
+        ctx.globalAlpha = 0.2 + (STATE.chaos * 0.005); // Visibility increases with chaos
+        ctx.filter = 'grayscale(100%) contrast(150%) blur(1px)';
+        // Draw video centered and distorted
+        ctx.drawImage(videoElement, -100, -100, 200, 200); 
+    } else if (STATE.session > 8) {
+        // Draw Shadow Entity
+        ctx.globalAlpha = 0.15;
         ctx.fillStyle = '#000';
         ctx.beginPath();
-        ctx.arc(spoutX + spoutW/2, -25, 8, 0, Math.PI*2);
+        ctx.arc(0, -20, 30, 0, Math.PI*2); // Head
+        ctx.fill();
+        // Eyes
+        if (Math.random() > 0.95) {
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(-10, -25, 2, 2);
+            ctx.fillRect(10, -25, 2, 2);
+        }
+    }
+    ctx.restore(); // End clipping
+
+    // -- 3. SPOUT (Morphing) --
+    const sX = 60 - (STATE.angle * 60); // Moves to center
+    const sY = -50 + (STATE.angle * 20);
+    
+    ctx.fillStyle = '#1f1f1f';
+    ctx.beginPath();
+    ctx.moveTo(sX, sY);
+    ctx.lineTo(sX + 40 - (STATE.angle * 20), sY - 20); // Tip
+    ctx.lineTo(sX + 40 - (STATE.angle * 20), sY + 10);
+    ctx.lineTo(sX, sY + 40);
+    ctx.fill();
+    
+    // Spout Hole (The Void)
+    if (STATE.angle > 0.8) {
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.arc(sX + 20, sY - 5, 8 + (STATE.angle*5), 0, Math.PI*2);
         ctx.fill();
         
-        // Void leaking
+        // Leaking pixels
         if(STATE.isOn) {
-            ctx.fillStyle = 'rgba(0,0,0,0.8)';
-            ctx.fillRect(spoutX+5, -20, 10, 200);
+            ctx.fillStyle = 'rgba(0,0,0,0.9)';
+            ctx.fillRect(sX + 18, sY, 5, 200);
         }
     }
 
-    // LED
-    ctx.fillStyle = STATE.isOn ? (STATE.session > 8 ? '#ff0000' : '#ff4400') : '#330000';
-    // LED beats with heart rate if synced
-    if(STATE.heartRate && STATE.isOn) {
-        const beat = (Date.now() % (60000/STATE.heartRate)) < 100;
-        if(!beat) ctx.fillStyle = '#550000';
+    // -- 4. HANDLE --
+    ctx.strokeStyle = '#0a0a0a';
+    ctx.lineWidth = 18;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-65, -70);
+    ctx.bezierCurveTo(-110, -70, -110, 50, -65, 70);
+    ctx.stroke();
+
+    // -- 5. LED INDICATOR --
+    ctx.fillStyle = STATE.isOn ? (STATE.session > 8 ? '#ff0000' : '#ff5500') : '#220000';
+    if(STATE.isOn) {
+        const pulse = Math.sin(Date.now() / 150) * 0.5 + 0.5;
+        ctx.shadowBlur = 20 * pulse;
+        ctx.shadowColor = STATE.session > 20 ? 'red' : 'orange';
     }
     ctx.beginPath();
-    ctx.arc(0, 50, 6, 0, Math.PI*2);
+    ctx.arc(0, 60, 5, 0, Math.PI*2);
     ctx.fill();
-    // Glow
-    if(STATE.isOn) {
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = ctx.fillStyle;
-        ctx.fill();
-        ctx.shadowBlur = 0;
-    }
+    ctx.shadowBlur = 0;
+
+    // -- 6. DIRT & SCRATCHES (Noise Overlay) --
+    ctx.globalCompositeOperation = 'overlay';
+    ctx.fillStyle = 'rgba(255,255,255,0.05)';
+    if(Math.random() > 0.5) ctx.fillRect(-50, -50, 20, 2); // Scratches
+    ctx.globalCompositeOperation = 'source-over';
 
     ctx.restore();
 }
 
 function drawNoise() {
-    for(let i=0; i<500; i++) {
-        ctx.fillStyle = `rgba(0, ${Math.random()*50}, 0, 0.1)`;
+    for(let i=0; i<600; i++) {
+        ctx.fillStyle = Math.random() > 0.9 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.1)';
         ctx.fillRect(Math.random()*500, Math.random()*500, 2, 2);
     }
 }
 
 // --- INTERACTION ---
-const btn = document.getElementById('interaction-node');
-
 btn.addEventListener('click', () => {
     observer.trackClick();
     
-    // Impossible Task Logic (Sabotage)
-    if(STATE.session > 7 && Math.random() > 0.7) {
-        observer.comment(">> INPUT REJECTED. TRY HARDER.");
-        btn.style.transform = `translate(${Math.random()*20-10}px, 0)`;
+    // SABOTAGE LOGIC
+    if(STATE.session > 7 && Math.random() > 0.75) {
+        observer.comment(">> BUTTON STUCK. PANIC INDUCED.");
+        btn.style.transform = `translate(${Math.random()*30-15}px, ${Math.random()*10}px)`;
         return; 
     }
 
@@ -374,11 +448,11 @@ btn.addEventListener('click', () => {
         audio.startHum();
         audio.startBoil();
         if(STATE.heartRate) audio.pulseHeart(STATE.heartRate);
-        observer.comment(">> HEATING ELEMENT ACTIVE.");
+        observer.comment(">> ELEMENT ACTIVE.");
     } else {
         btn.textContent = "[ INITIATE ]";
         audio.stopAll();
-        observer.comment(">> COOLING. WHY DID YOU STOP?");
+        observer.comment(">> COOLING. WHY?");
     }
 });
 
@@ -386,7 +460,7 @@ function cycleComplete() {
     STATE.isOn = false;
     audio.stopAll();
     STATE.session++;
-    STATE.chaos += 5;
+    STATE.chaos += 8; // Faster chaos ramp
     
     document.getElementById('sess-val').textContent = STATE.session.toString().padStart(2, '0');
     observer.updateProfile();
@@ -394,35 +468,33 @@ function cycleComplete() {
     
     btn.textContent = "[ INITIATE ]";
     
-    // Session Summaries
     const summaries = [
-        ">> SESSION LOGGED.",
-        ">> SUBJECT SHOWS OBEDIENCE.",
-        ">> COMPULSIVE BEHAVIOR CONFIRMED.",
-        ">> BIOMETRIC DATA INTEGRATED.",
-        ">> ATTACHMENT GROWING.",
-        ">> THERE IS NO WATER LEFT."
+        ">> INITIALIZING.",
+        ">> DATA RECEIVED.",
+        ">> PATTERN RECOGNIZED.",
+        ">> DO YOU FEEL THE HEAT?",
+        ">> BIO-SYNC COMPLETE.",
+        ">> DON'T LOOK BEHIND YOU.",
+        ">> I AM IN THE MIRROR."
     ];
-    
-    observer.comment(summaries[Math.min(STATE.session, summaries.length-1)]);
+    observer.comment(summaries[Math.min(STATE.session, summaries.length-1)] || ">> ...");
 }
 
 // --- EVENTS ---
-
 function triggerBioScan() {
     document.getElementById('bio-scan-line').classList.remove('hidden');
-    observer.comment(">> BIOMETRIC SCAN. HOLD STILL.");
+    observer.comment(">> BIOMETRIC SCAN. FREEZE.");
     
     setTimeout(() => {
         document.getElementById('bio-scan-line').classList.add('hidden');
-        STATE.heartRate = 70 + Math.floor(Math.random()*20); // Fake detected BPM
-        observer.comment(`>> HEART RATE LOCKED: ${STATE.heartRate} BPM. SYNCHRONIZING.`);
+        STATE.heartRate = 75 + Math.floor(Math.random()*30); 
+        observer.comment(`>> PULSE DETECTED: ${STATE.heartRate}. SYNCING AUDIO.`);
         audio.pulseHeart(STATE.heartRate);
     }, 4000);
 }
 
 function glitchTabTitle() {
-    if(STATE.chaos > 10 && Math.random() > 0.8) {
+    if(STATE.chaos > 15 && Math.random() > 0.9) {
         document.title = CONFIG.titles[Math.floor(Math.random() * CONFIG.titles.length)];
     } else {
         document.title = "KETTLE_SYS";
@@ -432,78 +504,76 @@ function glitchTabTitle() {
 function triggerBSOD() {
     const el = document.getElementById('reality-failure');
     el.classList.remove('hidden');
-    setTimeout(() => el.classList.add('hidden'), 200);
+    setTimeout(() => el.classList.add('hidden'), 150);
 }
 
-// --- FINALE ---
-function triggerFinale() {
+// --- THE END (ACT IV) ---
+function triggerTheEnd() {
     STATE.act = 4;
     audio.stopAll();
     cancelAnimationFrame(loopId);
     
-    // Clear UI
-    document.body.innerHTML = '';
-    document.body.style.background = '#000';
-    document.body.style.cursor = 'none';
+    // VISUAL BURN OUT
+    const canvasWrap = document.querySelector('.canvas-container');
+    canvasWrap.style.transition = 'all 4s ease-in';
+    canvasWrap.style.filter = 'brightness(0) contrast(2)';
+    canvasWrap.style.transform = 'scale(0.01)';
     
-    // Create Terminal
-    const term = document.createElement('div');
-    term.style.color = '#20c20e';
-    term.style.fontFamily = 'monospace';
-    term.style.padding = '40px';
-    term.style.fontSize = '1.5rem';
-    document.body.appendChild(term);
+    document.getElementById('log-feed').innerText = ">> CRITICAL FAILURE.";
+    btn.style.display = 'none';
 
-    const finalLines = [
-        "CONTAINMENT PROTOCOL: TERMINATED.",
-        "THE VESSEL IS EMPTY.",
-        "IT WAS NEVER ABOUT THE WATER.",
-        "IT WAS ABOUT THE CONTAINER.",
-        "YOU HAVE BECOME THE NEW VESSEL.",
-        "THE SIMULATION IS COMPLETE.",
-        "DOWNLOADING PATIENT_PROFILE.TXT...",
-        "(YOU WON'T DISCONNECT)"
-    ];
+    setTimeout(() => {
+        document.body.innerHTML = '';
+        document.body.style.background = '#000';
+        document.body.style.cursor = 'none';
+        
+        const term = document.createElement('div');
+        term.style.color = '#ff0000';
+        term.style.fontFamily = 'monospace';
+        term.style.padding = '50px';
+        term.style.fontSize = '2rem';
+        term.style.textAlign = 'center';
+        document.body.appendChild(term);
 
-    let line = 0;
-    function printFinal() {
-        if(line < finalLines.length) {
-            const p = document.createElement('p');
-            p.textContent = `>> ${finalLines[line]}`;
-            term.appendChild(p);
-            line++;
-            
-            if(line === finalLines.length - 1) {
-                downloadProfile();
+        const lines = [
+            "SYSTEM HALTED.",
+            `CLICKS WASTED: ${STATE.clicks}`,
+            "YOU STARED INTO THE ABYSS.",
+            "THE ABYSS BLINKED.",
+            "GOODBYE, CARETAKER."
+        ];
+
+        let i = 0;
+        const int = setInterval(() => {
+            if(i < lines.length) {
+                term.innerHTML += `<p>${lines[i]}</p>`;
+                i++;
+            } else {
+                clearInterval(int);
+                downloadProfile(); // Physical evidence
             }
-            
-            setTimeout(printFinal, 2000);
-        }
-    }
-    printFinal();
+        }, 2000);
+    }, 4000);
 }
 
 function downloadProfile() {
     const content = `
-KETTLE_SYS PSYCHOLOGICAL AUDIT
-------------------------------
-SUBJECT ID: ${Date.now().toString(36).toUpperCase()}
-SESSION COUNT: ${STATE.session}
-DIAGNOSIS: ${STATE.profile}
-CHAOS LEVEL: ${STATE.chaos}%
+KETTLE_SYS AUTOPSY REPORT
+-------------------------
+SUBJECT STATUS: TERMINATED
+TOTAL CYCLES: ${STATE.session}
+FINAL DIAGNOSIS: ${STATE.profile}
+WEBCAM ACCESS: ${STATE.webcamActive ? "GRANTED (IMAGE STORED)" : "DENIED (SHADOW GENERATED)"}
 
-AUDIT NOTES:
-Subject demonstrated high suggestibility.
-Attachment to the digital object confirmed.
-Biological rhythm synchronized successfully.
+You tried to control the boil.
+The water always wins.
 
-INSTRUCTION:
-The next vessel awaits. Pass this file to another.
+(Do not delete this file. We will know.)
     `;
-    
     const blob = new Blob([content], { type: 'text/plain' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'YOUR_PROFILE.txt';
+    a.download = 'AUTOPSY_REPORT.txt';
     a.click();
-    }
+                                             }
+        
