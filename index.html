@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>КЕТТЛ — Симулятор</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/x-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🫖</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <!-- ЭЛЕМЕНТЫ ИНТЕРФЕЙСА (ГЛЮЧАЩИЕ) -->
+        <div id="ui">
+            <div class="terminal-text" id="status">>> СИСТЕМА ГОТОВА</div>
+            <div class="terminal-text" id="counter">ЦИКЛ: <span id="cycle-count">0</span></div>
+            <div class="terminal-text" id="time-display">--:--:--</div>
+        </div>
+
+        <!-- ГЛАВНАЯ КНОПКА -->
+        <button id="power-btn" class="pixel-button">[ ВКЛ / ВЫКЛ ]</button>
+
+        <!-- ХОЛСТ ДЛЯ ПИКСЕЛЬ-ЧАЙНИКА И ЭФФЕКТОВ -->
+        <canvas id="kettleCanvas" width="400" height="400"></canvas>
+
+        <!-- СКРЫТЫЕ СООБЩЕНИЯ -->
+        <div id="messages"></div>
+
+        <!-- ДИАЛОГ ПРИ ПОПЫТКЕ ВЫЙТИ (ПОЯВЛЯЕТСЯ ПРОГРАММНО) -->
+        <div id="exit-dialog" class="dialog">
+            <div class="dialog-content pixel-border">
+                <p class="terminal-text">>> ТЫ ЖЕ НЕ ХОЧЕШЬ, ЧТОБЫ ОН ОСТЫЛ?</p>
+                <div>
+                    <button id="dialog-no" class="pixel-button-small">[ ОСТАТЬСЯ ]</button>
+                    <button id="dialog-yes" class="pixel-button-small">[ ВЫЙТИ ]</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- АУДИО ЭЛЕМЕНТЫ (СКРЫТЫ) -->
+    <audio id="boilSound" loop><source src="https://assets.mixkit.co/sfx/preview/mixkit-electric-kettle-boiling-1380.mp3" type="audio/mpeg"></audio>
+    <audio id="clickSound"><source src="https://assets.mixkit.co/sfx/preview/mixkit-light-switch-click-1370.mp3" type="audio/mpeg"></audio>
+    <audio id="whisperSound"><source src="https://assets.mixkit.co/sfx/preview/mixkit-creepy-whisper-220.mp3" type="audio/mpeg"></audio>
+    <audio id="heartbeatSound"><source src="https://assets.mixkit.co/sfx/preview/mixkit-slow-heartbeat-493.mp3" type="audio/mpeg"></audio>
+
+    <script src="script.js"></script>
+</body>
+</html>
