@@ -1,47 +1,70 @@
-// --- AUDIO SYSTEM (PROCEDURAL) ---
-class AudioSynth {
+/* KETTLE.EXE V2.0 - PSYCHOLOGICAL AUDIT PROTOCOL */
+
+const CONFIG = {
+    titles: ["KETTLE.EXE", "DON'T LOOK", "IT'S COOLING", "YOU ARE HERE", "⠀"],
+    bootText: `>> LOADING KTL_OS...
+>> WARNING: ENTITY DETECTED IN CONTAINMENT PROTOCOL.
+>> THIS IS NOT A SIMULATION.
+>> THIS IS A CONTAINMENT VESSEL.
+>> THE KETTLE HOLDS WHAT BOILS WITHIN.
+>> DO NOT LET IT COOL.
+>> ...
+>> CLICK TO ASSUME CONTROL (AND RESPONSIBILITY).`
+};
+
+const STATE = {
+    session: 1,
+    isOn: false,
+    temp: 20,
+    chaos: 0, // 0-100
+    heartRate: 0, // Fake BPM
+    startTime: Date.now(),
+    act: 0, // 0:Boot, 1:Normal, 2:Audit, 3:Symbiosis, 4:Final
+    angle: 0,
+    clicks: 0,
+    profile: "NEUROTYPICAL",
+    resignationTimer: 0
+};
+
+// --- AUDIO ENGINE (Procedural Horror) ---
+class AudioEngine {
     constructor() {
         this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-        this.masterGain = this.ctx.createGain();
-        this.masterGain.connect(this.ctx.destination);
-        this.masterGain.gain.value = 0.5;
-        this.oscillators = [];
+        this.master = this.ctx.createGain();
+        this.master.connect(this.ctx.destination);
+        this.master.gain.value = 0.4;
+        this.humOsc = null;
+        this.boilNode = null;
+        this.heartOsc = null;
     }
 
-    // Звук трансформатора (гул)
-    playHum() {
-        const osc = this.ctx.createOscillator();
+    startHum() {
+        // Deep 50Hz mains hum + sub-bass fear freq
+        this.humOsc = this.ctx.createOscillator();
+        this.humOsc.type = 'sawtooth';
+        this.humOsc.frequency.value = 50;
+        
+        const lowOsc = this.ctx.createOscillator();
+        lowOsc.type = 'sine';
+        lowOsc.frequency.value = 18; // Infrasound range
+
         const gain = this.ctx.createGain();
-        osc.type = 'sawtooth';
-        osc.frequency.value = 50; // 50Hz mains hum
+        gain.gain.value = 0.1;
         
-        // Модуляция для нестабильности
-        const lfo = this.ctx.createOscillator();
-        lfo.frequency.value = 0.5;
-        const lfoGain = this.ctx.createGain();
-        lfoGain.gain.value = 5;
-        lfo.connect(lfoGain);
-        lfoGain.connect(osc.frequency);
-        lfo.start();
-
-        osc.connect(gain);
-        gain.connect(this.masterGain);
+        this.humOsc.connect(gain);
+        lowOsc.connect(gain);
+        gain.connect(this.master);
         
-        osc.start();
-        gain.gain.setValueAtTime(0, this.ctx.currentTime);
-        gain.gain.linearRampToValueAtTime(0.1, this.ctx.currentTime + 0.1);
-
-        return { osc, gain, lfo };
+        this.humOsc.start();
+        lowOsc.start();
+        this.humRef = { osc: this.humOsc, low: lowOsc, gain: gain };
     }
 
-    // Звук кипения (White Noise Filtered)
-    playBoil() {
-        const bufferSize = 2 * this.ctx.sampleRate;
-        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    startBoil() {
+        const bufSize = 2 * this.ctx.sampleRate;
+        const buffer = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
         const data = buffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) {
-            data[i] = Math.random() * 2 - 1;
-        }
+        for(let i=0; i<bufSize; i++) data[i] = Math.random() * 2 - 1;
 
         const noise = this.ctx.createBufferSource();
         noise.buffer = buffer;
@@ -56,304 +79,431 @@ class AudioSynth {
 
         noise.connect(filter);
         filter.connect(gain);
-        gain.connect(this.masterGain);
+        gain.connect(this.master);
         noise.start();
-
-        return { node: noise, gain: gain, filter: filter };
+        
+        this.boilRef = { node: noise, filter: filter, gain: gain };
     }
 
-    playClick() {
+    pulseHeart(bpm) {
+        if(this.heartOsc) return;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
-        osc.frequency.value = 1000;
-        osc.type = 'square';
+        osc.frequency.value = 40; // Low thud
         osc.connect(gain);
-        gain.connect(this.masterGain);
-        osc.start();
-        gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.05);
-        osc.stop(this.ctx.currentTime + 0.05);
-    }
-
-    // Звук ужаса (Shepard Tone approximation / Heartbeat)
-    playHeartbeat() {
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.frequency.value = 40;
-        osc.type = 'sine';
-        
-        osc.connect(gain);
-        gain.connect(this.masterGain);
+        gain.connect(this.master);
         osc.start();
         
-        // Импульс
-        setInterval(() => {
+        const interval = 60000 / bpm;
+        this.heartInterval = setInterval(() => {
             gain.gain.setValueAtTime(0.5, this.ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.2);
-        }, 1200);
+            gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.15);
+        }, interval);
+    }
+
+    stopAll() {
+        if(this.humRef) { this.humRef.osc.stop(); this.humRef.low.stop(); }
+        if(this.boilRef) { this.boilRef.node.stop(); }
+        if(this.heartInterval) clearInterval(this.heartInterval);
     }
 }
 
-// --- GAME LOGIC ---
-const STATE = {
-    isOn: false,
-    cycle: 0,
-    temp: 20,
-    chaos: 0, // 0 to 100
-    act: 1, // 1: Normal, 2: Glitch, 3: Horror
-    angle: 0, // Угол поворота чайника (для Акта 3)
-};
+// --- SHADOW OBSERVER (AI Logic) ---
+class ShadowObserver {
+    constructor() {
+        this.clickHistory = [];
+        this.lastAction = Date.now();
+        this.hesitationTriggered = false;
+        
+        // Persistent Memory Check
+        const saved = localStorage.getItem('kettle_profile');
+        if(saved) {
+            const data = JSON.parse(saved);
+            STATE.session = data.session + 1;
+            STATE.profile = data.profile;
+            console.log(">> WELCOME BACK, CARETAKER.");
+        }
+    }
 
-const TEXTS = [
-    ">> HEATING...",
-    ">> DO NOT TOUCH",
-    ">> WATCHING",
-    ">> IT BOILS",
-    ">> I SEE YOU",
-    ">> SYSTEM FAIL",
-    ">> NULL POINTER"
-];
+    trackClick() {
+        const now = Date.now();
+        const delta = now - this.lastAction;
+        this.clickHistory.push(delta);
+        if(this.clickHistory.length > 20) this.clickHistory.shift();
+        this.lastAction = now;
+        STATE.clicks++;
+        this.hesitationTriggered = false;
+        
+        // Analyze Patterns
+        if(delta < 200) this.comment(">> ADRENALINE DETECTED.");
+        
+        this.save();
+    }
 
-// Setup
-const canvas = document.getElementById('kettle-screen');
+    checkIdle() {
+        const idleTime = Date.now() - this.lastAction;
+        
+        // Resignation trigger for Finale
+        if (STATE.act >= 3 && STATE.isOn && idleTime > 30000) {
+            STATE.resignationTimer++;
+            if (STATE.resignationTimer > 1000) triggerFinale(); // Approx 15s in loop
+        }
+
+        if(idleTime > 10000 && !this.hesitationTriggered && STATE.act < 4) {
+            this.hesitationTriggered = true;
+            this.comment(Math.random() > 0.5 ? ">> WHY ARE YOU WAITING?" : ">> I CAN WAIT FOREVER.");
+        }
+    }
+
+    updateProfile() {
+        const el = document.getElementById('user-profile');
+        if(STATE.session > 4) { STATE.profile = "ANXIETY"; el.className = "anxious"; }
+        if(STATE.session > 8) { STATE.profile = "OBSESSIVE"; el.className = "critical"; }
+        if(STATE.session > 12) { STATE.profile = "SYMBIOTIC"; }
+        el.innerText = STATE.profile;
+        document.documentElement.style.setProperty('--primary', 
+            STATE.session > 8 ? '#ff3333' : (STATE.session > 4 ? '#d4ce18' : '#20c20e'));
+    }
+
+    comment(text) {
+        const feed = document.getElementById('log-feed');
+        feed.innerText = text;
+        feed.style.opacity = 1;
+        // Text glitch effect
+        setTimeout(() => feed.style.opacity = 0.5, 100);
+        setTimeout(() => feed.style.opacity = 1, 200);
+    }
+
+    save() {
+        localStorage.setItem('kettle_profile', JSON.stringify({
+            session: STATE.session,
+            profile: STATE.profile,
+            chaos: STATE.chaos
+        }));
+    }
+}
+
+// --- MAIN INIT ---
+const audio = new AudioEngine();
+const observer = new ShadowObserver();
+const canvas = document.getElementById('bio-screen');
 const ctx = canvas.getContext('2d');
-const btn = document.getElementById('pwr-btn');
-const statusEl = document.getElementById('status-line');
-const cycleEl = document.getElementById('cycle-val');
-const timeEl = document.getElementById('sys-time');
+let loopId;
 
-let synth;
-let boilSoundObj = null;
-let humSoundObj = null;
-let animationId;
+// Boot Sequence
+const bootEl = document.getElementById('boot-text');
+let bootIdx = 0;
 
-// Init
-document.getElementById('boot-screen').addEventListener('click', () => {
-    synth = new AudioSynth();
-    synth.ctx.resume();
-    document.getElementById('boot-screen').style.display = 'none';
-    startGame();
-});
+function typeBoot() {
+    if(bootIdx < CONFIG.bootText.length) {
+        bootEl.textContent += CONFIG.bootText.charAt(bootIdx);
+        bootIdx++;
+        setTimeout(typeBoot, 30 + Math.random()*50);
+    } else {
+        document.getElementById('boot-sequence').addEventListener('click', startSession);
+    }
+}
+window.onload = typeBoot;
 
-function startGame() {
-    requestAnimationFrame(gameLoop);
-    setInterval(updateTime, 1000);
+function startSession() {
+    audio.ctx.resume();
+    document.getElementById('boot-sequence').classList.add('hidden');
+    document.getElementById('containment-unit').classList.remove('hidden');
+    STATE.act = 1;
+    observer.updateProfile();
     
-    // Перехват закрытия вкладки
-    window.onbeforeunload = function(e) {
-        if (STATE.act > 1) {
-            document.getElementById('modal-overlay').classList.remove('hidden');
-            return "LEAVING?";
+    // Check if "cleansed"
+    if(localStorage.getItem('kettle_profile')) {
+        observer.comment(">> DATA RESTORED FROM BACKUP.");
+    }
+
+    gameLoop();
+    setInterval(() => {
+        document.getElementById('sys-time').innerText = new Date().toLocaleTimeString();
+        observer.checkIdle();
+        glitchTabTitle();
+    }, 1000);
+    
+    // Window Focus Tracking
+    window.onblur = () => {
+        if(STATE.act > 1) observer.comment(">> ESCAPE ATTEMPT NOTED.");
+    };
+    
+    // Prevent Close
+    window.onbeforeunload = (e) => {
+        if(STATE.session > 2) {
+            e.preventDefault();
+            return "THE VESSEL MUST NOT COOL.";
         }
     };
 }
 
-// Button Logic
-btn.addEventListener('click', () => {
-    if(!synth) return;
-    
-    synth.playClick();
-    
-    // Акт 3: Кнопка убегает или не работает
-    if (STATE.act === 3 && Math.random() > 0.7) {
-        btn.style.transform = `translate(${Math.random()*20-10}px, ${Math.random()*20-10}px)`;
-        return;
-    }
-
-    toggleKettle();
-});
-
-document.getElementById('stay-btn').addEventListener('click', () => {
-    document.getElementById('modal-overlay').classList.add('hidden');
-    statusEl.innerText = ">> GOOD CHOICE";
-    STATE.chaos += 10;
-});
-
-function toggleKettle() {
-    STATE.isOn = !STATE.isOn;
-    
-    if (STATE.isOn) {
-        btn.innerText = "[ ABORT ]";
-        statusEl.innerText = ">> ELEMENT ACTIVE";
-        statusEl.classList.remove('text-glitch');
-        
-        // Start Sounds
-        humSoundObj = synth.playHum();
-        boilSoundObj = synth.playBoil();
-        
-    } else {
-        btn.innerText = "[ I/O ]";
-        statusEl.innerText = ">> COOLING DOWN";
-        
-        // Stop Sounds
-        if(humSoundObj) {
-            humSoundObj.osc.stop();
-            humSoundObj = null;
-        }
-        if(boilSoundObj) {
-            boilSoundObj.node.stop();
-            boilSoundObj = null;
-        }
-    }
-}
-
-// Game Loop
+// --- GAME LOOP ---
 function gameLoop() {
-    updatePhysics();
-    draw();
+    if(STATE.act === 4) return; // Finale stops loop
+
+    ctx.fillStyle = '#050505';
+    ctx.fillRect(0,0,500,500);
+
+    drawNoise();
+    drawKettle();
     
-    // Glitch trigger
-    if (STATE.chaos > 20 && Math.random() < 0.05) {
-        ctx.fillStyle = `rgba(${Math.random()*255}, 0, 0, 0.2)`;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
-
-    requestAnimationFrame(gameLoop);
-}
-
-function updatePhysics() {
-    if (STATE.isOn) {
-        STATE.temp += 0.5 + (STATE.chaos * 0.01);
+    // Physics & Progression
+    if(STATE.isOn) {
+        STATE.temp += 0.3 + (STATE.chaos * 0.02);
         
-        // Modulate boil sound based on temp
-        if (boilSoundObj) {
-            const vol = Math.min((STATE.temp - 20) / 100, 1);
-            boilSoundObj.gain.gain.value = vol * 0.5;
-            boilSoundObj.filter.frequency.value = 200 + (STATE.temp * 10);
+        // Audio modulation
+        if(audio.boilRef) {
+            const vol = Math.min((STATE.temp - 20)/100, 1);
+            audio.boilRef.gain.gain.value = vol;
+            audio.boilRef.filter.frequency.value = 200 + (STATE.temp * 15);
         }
 
-        if (STATE.temp >= 100) {
-            // Boiled
-            completeCycle();
+        if(STATE.temp >= 100) {
+            cycleComplete();
         }
     } else {
-        if (STATE.temp > 20) STATE.temp -= 0.2;
+        if(STATE.temp > 20) STATE.temp -= 0.5;
     }
 
-    // Act Progression
-    if (STATE.cycle > 4) STATE.act = 2;
-    if (STATE.cycle > 8) STATE.act = 3;
+    // Act 2: Bio-Scan Event
+    if(STATE.session === 5 && !STATE.heartRate && STATE.isOn) {
+        triggerBioScan();
+    }
 
     // Act 3: Turning
-    if (STATE.act === 3) {
-        if (STATE.angle < 1) STATE.angle += 0.0005; // Медленный поворот
-        if (!window.heartbeatStarted) {
-            synth.playHeartbeat();
-            window.heartbeatStarted = true;
-            document.body.classList.add('shake-screen');
-        }
+    if(STATE.session > 10) {
+        STATE.act = 3;
+        if(STATE.angle < 1) STATE.angle += 0.001;
     }
+
+    // Random BSOD
+    if(STATE.chaos > 50 && Math.random() < 0.001) {
+        triggerBSOD();
+    }
+
+    loopId = requestAnimationFrame(gameLoop);
 }
 
-function completeCycle() {
-    toggleKettle(); // Auto off
-    STATE.cycle++;
-    cycleEl.innerText = "0x" + STATE.cycle.toString(16).toUpperCase().padStart(2,'0');
-    synth.playClick();
+// --- RENDERER ---
+function drawKettle() {
+    const cx = 250;
+    const cy = 250;
     
-    // Events
-    if (STATE.act === 2) {
-        statusEl.innerText = TEXTS[Math.floor(Math.random() * TEXTS.length)];
-        statusEl.classList.add('text-glitch');
-        STATE.chaos += 5;
-    }
+    // Calculate wobble based on heat
+    const wobble = STATE.isOn ? (Math.random() - 0.5) * (STATE.temp/20) : 0;
     
-    if (STATE.act === 3) {
-        statusEl.innerText = ">> RUNNING_";
-    }
-}
-
-function updateTime() {
-    const d = new Date();
-    timeEl.innerText = d.toTimeString().split(' ')[0];
-}
-
-// --- RENDERER (PIXEL ART SIMULATION) ---
-function draw() {
-    // Clear
-    ctx.fillStyle = '#111';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    const w = canvas.width;
-    const h = canvas.height;
-    const cx = w / 2;
-    const cy = h / 2;
-
-    // Noise Background
-    for (let i = 0; i < 1000; i++) {
-        ctx.fillStyle = Math.random() > 0.5 ? '#1a1a1a' : '#0d0d0d';
-        ctx.fillRect(Math.random()*w, Math.random()*h, 2, 2);
-    }
-
-    // KETTLE DRAWING LOGIC (Procedural Pixel Art)
-    // Shift perspective based on Act 3 angle
-    const shiftX = STATE.angle * 20; 
+    ctx.save();
+    ctx.translate(cx + wobble, cy);
     
-    // Body
-    ctx.fillStyle = '#444'; // Plastic
-    ctx.fillRect(cx - 60, cy - 50, 120, 140);
-    
-    // Shading (Dithering fake)
-    ctx.fillStyle = '#333';
-    ctx.fillRect(cx + 20, cy - 50, 40, 140);
-
-    // Metallic Band
-    ctx.fillStyle = '#888';
-    ctx.fillRect(cx - 55, cy - 40, 110, 80);
-
-    // Spout (The scary part - it moves in Act 3)
-    // Normal spout is to the right. As angle increases, it moves center and down.
-    const spoutX = (cx + 60) - (STATE.angle * 60);
-    const spoutW = 40 - (STATE.angle * 10); // Gets narrower as it points at you
-    const spoutH = 10 + (STATE.angle * 20); // Gets "taller" (depth)
-    
-    ctx.fillStyle = '#666';
-    ctx.fillRect(spoutX, cy - 20 + (STATE.angle * 10), spoutW, spoutH);
-    
-    // If facing player (Act 3), draw the hole
-    if (STATE.angle > 0.5) {
-        ctx.fillStyle = '#000';
-        const holeSize = STATE.angle * 15;
-        ctx.fillRect(spoutX + spoutW/2 - holeSize/2, cy - 15 + (STATE.angle * 15), holeSize, holeSize);
-        
-        // The Void Substance
-        if (STATE.act === 3 && STATE.isOn) {
-            ctx.fillStyle = '#000';
-            ctx.beginPath();
-            ctx.moveTo(spoutX + spoutW/2, cy);
-            ctx.lineTo(w/2 - 50 + Math.random()*100, h);
-            ctx.lineTo(w/2 + 50 + Math.random()*100, h);
-            ctx.fill();
-        }
-    }
-
-    // Handle
+    // The Container
     ctx.fillStyle = '#222';
-    ctx.fillRect(cx - 80, cy - 40, 20, 100);
+    ctx.fillRect(-60, -80, 120, 140);
+    
+    // Metallic Texture
+    ctx.fillStyle = STATE.act > 2 ? '#3a0000' : '#444'; // Turns red/flesh in later acts
+    ctx.fillRect(-50, -70, 100, 80);
 
-    // LED Indicator
-    ctx.fillStyle = STATE.isOn ? '#ff0000' : '#330000';
-    if (STATE.isOn) {
-        ctx.shadowBlur = 20;
-        ctx.shadowColor = 'red';
-    }
-    ctx.fillRect(cx, cy + 60, 10, 10);
-    ctx.shadowBlur = 0;
+    // Spout (The Turning Logic)
+    // Normal: x=60. Turned: x=0 (Center)
+    const spoutX = 60 - (STATE.angle * 60);
+    const spoutW = 40 - (STATE.angle * 20);
+    
+    ctx.fillStyle = '#555';
+    ctx.fillRect(spoutX, -30, spoutW, 10 + (STATE.angle*10));
 
-    // Steam/Bubbles (Visual)
-    if (STATE.isOn && STATE.temp > 80) {
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-        for(let i=0; i<5; i++) {
-            const rx = cx - 40 + Math.random() * 80;
-            const ry = cy - 70 - Math.random() * 20;
-            ctx.fillRect(rx, ry, 4, 4);
+    // The Void Hole (Only visible if turned)
+    if(STATE.angle > 0.8) {
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.arc(spoutX + spoutW/2, -25, 8, 0, Math.PI*2);
+        ctx.fill();
+        
+        // Void leaking
+        if(STATE.isOn) {
+            ctx.fillStyle = 'rgba(0,0,0,0.8)';
+            ctx.fillRect(spoutX+5, -20, 10, 200);
         }
     }
-    
-    // RED EYES (Subliminal)
-    if (STATE.act === 3 && Math.random() > 0.95) {
-        ctx.fillStyle = 'red';
-        ctx.fillRect(cx - 20, cy - 60, 4, 4);
-        ctx.fillRect(cx + 20, cy - 60, 4, 4);
+
+    // LED
+    ctx.fillStyle = STATE.isOn ? (STATE.session > 8 ? '#ff0000' : '#ff4400') : '#330000';
+    // LED beats with heart rate if synced
+    if(STATE.heartRate && STATE.isOn) {
+        const beat = (Date.now() % (60000/STATE.heartRate)) < 100;
+        if(!beat) ctx.fillStyle = '#550000';
+    }
+    ctx.beginPath();
+    ctx.arc(0, 50, 6, 0, Math.PI*2);
+    ctx.fill();
+    // Glow
+    if(STATE.isOn) {
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = ctx.fillStyle;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+    }
+
+    ctx.restore();
+}
+
+function drawNoise() {
+    for(let i=0; i<500; i++) {
+        ctx.fillStyle = `rgba(0, ${Math.random()*50}, 0, 0.1)`;
+        ctx.fillRect(Math.random()*500, Math.random()*500, 2, 2);
     }
 }
+
+// --- INTERACTION ---
+const btn = document.getElementById('interaction-node');
+
+btn.addEventListener('click', () => {
+    observer.trackClick();
+    
+    // Impossible Task Logic (Sabotage)
+    if(STATE.session > 7 && Math.random() > 0.7) {
+        observer.comment(">> INPUT REJECTED. TRY HARDER.");
+        btn.style.transform = `translate(${Math.random()*20-10}px, 0)`;
+        return; 
+    }
+
+    STATE.isOn = !STATE.isOn;
+    
+    if(STATE.isOn) {
+        btn.textContent = "[ ABORT PROTOCOL ]";
+        audio.startHum();
+        audio.startBoil();
+        if(STATE.heartRate) audio.pulseHeart(STATE.heartRate);
+        observer.comment(">> HEATING ELEMENT ACTIVE.");
+    } else {
+        btn.textContent = "[ INITIATE ]";
+        audio.stopAll();
+        observer.comment(">> COOLING. WHY DID YOU STOP?");
+    }
+});
+
+function cycleComplete() {
+    STATE.isOn = false;
+    audio.stopAll();
+    STATE.session++;
+    STATE.chaos += 5;
+    
+    document.getElementById('sess-val').textContent = STATE.session.toString().padStart(2, '0');
+    observer.updateProfile();
+    observer.save();
+    
+    btn.textContent = "[ INITIATE ]";
+    
+    // Session Summaries
+    const summaries = [
+        ">> SESSION LOGGED.",
+        ">> SUBJECT SHOWS OBEDIENCE.",
+        ">> COMPULSIVE BEHAVIOR CONFIRMED.",
+        ">> BIOMETRIC DATA INTEGRATED.",
+        ">> ATTACHMENT GROWING.",
+        ">> THERE IS NO WATER LEFT."
+    ];
+    
+    observer.comment(summaries[Math.min(STATE.session, summaries.length-1)]);
+}
+
+// --- EVENTS ---
+
+function triggerBioScan() {
+    document.getElementById('bio-scan-line').classList.remove('hidden');
+    observer.comment(">> BIOMETRIC SCAN. HOLD STILL.");
+    
+    setTimeout(() => {
+        document.getElementById('bio-scan-line').classList.add('hidden');
+        STATE.heartRate = 70 + Math.floor(Math.random()*20); // Fake detected BPM
+        observer.comment(`>> HEART RATE LOCKED: ${STATE.heartRate} BPM. SYNCHRONIZING.`);
+        audio.pulseHeart(STATE.heartRate);
+    }, 4000);
+}
+
+function glitchTabTitle() {
+    if(STATE.chaos > 10 && Math.random() > 0.8) {
+        document.title = CONFIG.titles[Math.floor(Math.random() * CONFIG.titles.length)];
+    } else {
+        document.title = "KETTLE_SYS";
+    }
+}
+
+function triggerBSOD() {
+    const el = document.getElementById('reality-failure');
+    el.classList.remove('hidden');
+    setTimeout(() => el.classList.add('hidden'), 200);
+}
+
+// --- FINALE ---
+function triggerFinale() {
+    STATE.act = 4;
+    audio.stopAll();
+    cancelAnimationFrame(loopId);
+    
+    // Clear UI
+    document.body.innerHTML = '';
+    document.body.style.background = '#000';
+    document.body.style.cursor = 'none';
+    
+    // Create Terminal
+    const term = document.createElement('div');
+    term.style.color = '#20c20e';
+    term.style.fontFamily = 'monospace';
+    term.style.padding = '40px';
+    term.style.fontSize = '1.5rem';
+    document.body.appendChild(term);
+
+    const finalLines = [
+        "CONTAINMENT PROTOCOL: TERMINATED.",
+        "THE VESSEL IS EMPTY.",
+        "IT WAS NEVER ABOUT THE WATER.",
+        "IT WAS ABOUT THE CONTAINER.",
+        "YOU HAVE BECOME THE NEW VESSEL.",
+        "THE SIMULATION IS COMPLETE.",
+        "DOWNLOADING PATIENT_PROFILE.TXT...",
+        "(YOU WON'T DISCONNECT)"
+    ];
+
+    let line = 0;
+    function printFinal() {
+        if(line < finalLines.length) {
+            const p = document.createElement('p');
+            p.textContent = `>> ${finalLines[line]}`;
+            term.appendChild(p);
+            line++;
+            
+            if(line === finalLines.length - 1) {
+                downloadProfile();
+            }
+            
+            setTimeout(printFinal, 2000);
+        }
+    }
+    printFinal();
+}
+
+function downloadProfile() {
+    const content = `
+KETTLE_SYS PSYCHOLOGICAL AUDIT
+------------------------------
+SUBJECT ID: ${Date.now().toString(36).toUpperCase()}
+SESSION COUNT: ${STATE.session}
+DIAGNOSIS: ${STATE.profile}
+CHAOS LEVEL: ${STATE.chaos}%
+
+AUDIT NOTES:
+Subject demonstrated high suggestibility.
+Attachment to the digital object confirmed.
+Biological rhythm synchronized successfully.
+
+INSTRUCTION:
+The next vessel awaits. Pass this file to another.
+    `;
+    
+    const blob = new Blob([content], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'YOUR_PROFILE.txt';
+    a.click();
+    }
