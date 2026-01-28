@@ -1,232 +1,181 @@
-/* KETTLE.EXE V4.0 - FINAL MASTER CORE */
-
-const CONFIG = {
-    bootText: `>> LOADING KTL_OS...
->> WARNING: ENTITY DETECTED IN CONTAINMENT PROTOCOL.
->> THIS IS NOT A SIMULATION.
->> CONNECTING TO OPTICAL SENSORS...
->> ...
->> CLICK TO ASSUME CONTROL.`
-};
-
 const STATE = {
-    session: 1, isOn: false, temp: 20, chaos: 0, heartRate: 0,
-    act: 0, angle: 0, clicks: 0, profile: "NEUROTYPICAL",
-    webcamActive: false, resignationTimer: 0
+    session: 1, isOn: false, temp: 20, clicks: 0,
+    angle: 0, act: 1, webcamActive: false, lastAction: Date.now()
 };
 
-// --- ЗВУКОВОЙ ДВИЖОК ---
-class AudioEngine {
-    constructor() {
-        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-        this.master = this.ctx.createGain();
-        this.master.connect(this.ctx.destination);
-        this.master.gain.value = 0.3;
-    }
-
-    startWork() {
-        // Гул
-        this.hum = this.ctx.createOscillator();
-        this.hum.type = 'sawtooth';
-        this.hum.frequency.value = 50;
-        const hG = this.ctx.createGain(); hG.gain.value = 0.05;
-        this.hum.connect(hG); hG.connect(this.master);
-        this.hum.start();
-
-        // Шум кипения
-        const bufferSize = 2 * this.ctx.sampleRate;
-        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-        const data = buffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
-        
-        this.noise = this.ctx.createBufferSource();
-        this.noise.buffer = buffer; this.noise.loop = true;
-        this.filter = this.ctx.createBiquadFilter();
-        this.filter.type = 'lowpass'; this.filter.frequency.value = 200;
-        this.noiseGain = this.ctx.createGain(); this.noiseGain.gain.value = 0;
-        
-        this.noise.connect(this.filter);
-        this.filter.connect(this.noiseGain);
-        this.noiseGain.connect(this.master);
-        this.noise.start();
-    }
-
-    updateBoil(temp) {
-        if (this.noiseGain) {
-            this.noiseGain.gain.value = Math.min((temp - 20) / 100, 1);
-            this.filter.frequency.value = 200 + (temp * 10);
-        }
-    }
-
-    pulse(bpm) {
-        if (this.pInt) clearInterval(this.pInt);
-        this.pInt = setInterval(() => {
-            const o = this.ctx.createOscillator();
-            const g = this.ctx.createGain();
-            o.frequency.value = 40; o.connect(g); g.connect(this.master);
-            o.start(); g.gain.setValueAtTime(0.4, this.ctx.currentTime);
-            g.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.1);
-            o.stop(this.ctx.currentTime + 0.1);
-        }, 60000 / bpm);
-    }
-
-    stop() {
-        if (this.hum) this.hum.stop();
-        if (this.noise) this.noise.stop();
-        if (this.pInt) clearInterval(this.pInt);
-    }
-}
-
-// --- НАБЛЮДАТЕЛЬ ---
-const audio = new AudioEngine();
-const canvas = document.getElementById('bio-screen');
+const canvas = document.getElementById('main-frame');
 const ctx = canvas.getContext('2d');
 const video = document.createElement('video');
 video.autoplay = true;
 
-function updateProfile() {
-    const el = document.getElementById('user-profile');
-    if (STATE.session > 4) { STATE.profile = "ANXIETY"; el.className = "anxious"; }
-    if (STATE.session > 8) { STATE.profile = "OBSESSIVE"; el.className = "critical"; }
-    if (STATE.session > 12) { STATE.profile = "SYMBIOTIC"; }
-    el.innerText = STATE.profile;
+// --- ЦВЕТОВАЯ ДЕГРАДАЦИЯ ---
+function updateTheme() {
+    let color = '#20c20e'; // Зеленый
+    let status = "STABLE";
+    
+    if (STATE.session > 4) { color = '#d4ce18'; status = "ANXIOUS"; } // Желтый
+    if (STATE.session > 9) { color = '#ff3333'; status = "CRITICAL"; } // Красный
+    
+    document.documentElement.style.setProperty('--primary', color);
+    document.getElementById('user-profile').innerText = status;
+    document.getElementById('user-profile').style.color = color;
 }
 
-async function startCamera() {
+// --- СООБЩЕНИЯ (ТОТ САМЫЙ ГОЛОС) ---
+const MESSAGES = [
+    "I CAN WAIT FOREVER.",
+    "WHY ARE YOU WAITING?",
+    "THE WATER GROWS IMPATIENT.",
+    "DO NOT LOOK BEHIND YOU.",
+    "I SEE YOU IN THE REFLECTION.",
+    "IT'S GETTING HOT, ISN'T IT?",
+    "SOMETHING IS WRONG WITH THE REALITY."
+];
+
+function log(txt) {
+    const el = document.getElementById('message-log');
+    el.innerText = ">> " + txt;
+}
+
+// --- ВЕБ-КАМЕРА ---
+async function initWebcam() {
     try {
-        const s = await navigator.mediaDevices.getUserMedia({ video: true });
-        video.srcObject = s; STATE.webcamActive = true;
-        log(">> OPTICAL FEED ESTABLISHED.");
-    } catch (e) { log(">> SUBJECT HIDDEN. USING SHADOW."); }
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = stream;
+        STATE.webcamActive = true;
+        log("VISUAL LINK ESTABLISHED.");
+    } catch(e) {
+        log("CAMERA ACCESS DENIED. I WILL USE THE SHADOW.");
+    }
 }
-
-function log(txt) { document.getElementById('log-feed').innerText = txt; }
 
 // --- РЕНДЕР ЧАЙНИКА ---
-function draw() {
-    if (STATE.act === 4) return;
-    ctx.fillStyle = '#050505'; ctx.fillRect(0, 0, 500, 500);
-
-    const shake = STATE.isOn ? (Math.random() - 0.5) * (STATE.temp / 20) : 0;
+function drawKettle() {
+    ctx.fillStyle = '#050505'; ctx.fillRect(0,0,500,500);
+    
+    const cx = 250, cy = 250;
+    const shake = STATE.isOn ? (Math.random()-0.5)*(STATE.temp/25) : 0;
+    
     ctx.save();
-    ctx.translate(250 + shake, 250 + shake);
+    ctx.translate(cx + shake, cy + shake);
 
-    // Корпус
-    const g = ctx.createLinearGradient(-70, 0, 70, 0);
-    g.addColorStop(0, '#0a0a0a'); g.addColorStop(0.5, '#222'); g.addColorStop(1, '#000');
-    ctx.fillStyle = g;
+    // 1. КОРПУС (Градиент)
+    const bodyGrad = ctx.createLinearGradient(-80, 0, 80, 0);
+    bodyGrad.addColorStop(0, '#0a0a0a');
+    bodyGrad.addColorStop(0.5, '#252525');
+    bodyGrad.addColorStop(1, '#000');
+    
+    ctx.fillStyle = bodyGrad;
     ctx.beginPath();
-    ctx.moveTo(-60, -90); ctx.lineTo(60, -90);
-    ctx.quadraticCurveTo(80, 0, 70, 100); ctx.lineTo(-70, 100);
-    ctx.quadraticCurveTo(-80, 0, -60, -90);
+    ctx.moveTo(-65, -100); ctx.lineTo(65, -100);
+    ctx.quadraticCurveTo(90, 0, 75, 110);
+    ctx.lineTo(-75, 110);
+    ctx.quadraticCurveTo(-90, 0, -65, -100);
     ctx.fill();
 
-    // Отражение
-    ctx.save(); ctx.clip();
+    // 2. ОТРАЖЕНИЕ В КОРПУСЕ (Твоя камера)
+    ctx.save();
+    ctx.clip(); // Чтобы камера не вылезала за края чайника
     if (STATE.webcamActive) {
-        ctx.globalAlpha = 0.1 + (STATE.chaos / 200);
-        ctx.filter = 'grayscale(1) contrast(1.5)';
+        ctx.globalAlpha = 0.15 + (STATE.session * 0.02);
+        ctx.filter = 'grayscale(1) contrast(1.8) blur(1px)';
         ctx.drawImage(video, -150, -150, 300, 300);
-    } else if (STATE.session > 6) {
-        ctx.fillStyle = '#000'; ctx.globalAlpha = 0.2;
+    } else if (STATE.session > 5) {
+        // Если камеры нет - рисуем силуэт
+        ctx.fillStyle = '#000'; ctx.globalAlpha = 0.3;
         ctx.beginPath(); ctx.arc(0, -20, 40, 0, Math.PI*2); ctx.fill();
     }
     ctx.restore();
 
-    // Носик
-    const sx = 65 - (STATE.angle * 65);
+    // 3. НОСИК (Поворачивается в сессии 10+)
+    const sx = 70 - (STATE.angle * 70);
     ctx.fillStyle = '#111';
     ctx.beginPath();
-    ctx.moveTo(sx, -40); ctx.lineTo(sx + 40 - (STATE.angle * 20), -60);
-    ctx.lineTo(sx + 40 - (STATE.angle * 20), -30); ctx.lineTo(sx, 10);
+    ctx.moveTo(sx, -60);
+    ctx.lineTo(sx + 50 - (STATE.angle * 30), -80);
+    ctx.lineTo(sx + 50 - (STATE.angle * 30), -40);
+    ctx.lineTo(sx, 10);
     ctx.fill();
-    
-    if (STATE.angle > 0.8) { // Дыра
-        ctx.fillStyle = '#000'; ctx.beginPath();
-        ctx.arc(sx + 20, -45, 10, 0, Math.PI*2); ctx.fill();
+
+    if (STATE.angle > 0.8) { // ГЛАЗ В НОСИКЕ
+        ctx.fillStyle = '#000';
+        ctx.beginPath(); ctx.arc(sx+25, -60, 12, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--primary');
+        ctx.fillRect(sx+23, -62, 4, 4); // Зрачок цвета интерфейса
     }
 
-    // Лампочка
-    ctx.fillStyle = STATE.isOn ? (STATE.session > 10 ? 'red' : '#ff5500') : '#220000';
-    ctx.beginPath(); ctx.arc(0, 60, 5, 0, Math.PI*2); ctx.fill();
+    // 4. ИНДИКАТОР
+    ctx.fillStyle = STATE.isOn ? (STATE.session > 9 ? '#ff0000' : '#ff5500') : '#200';
+    ctx.beginPath(); ctx.arc(0, 80, 6, 0, Math.PI*2); ctx.fill();
 
     ctx.restore();
-    
-    // Логика
-    if (STATE.isOn) {
-        STATE.temp += 0.2;
-        audio.updateBoil(STATE.temp);
-        if (STATE.temp >= 100) finishCycle();
-    } else if (STATE.temp > 20) STATE.temp -= 0.1;
-
-    if (STATE.session > 10) STATE.angle = Math.min(STATE.angle + 0.0005, 1);
-    
-    requestAnimationFrame(draw);
 }
 
-// --- УПРАВЛЕНИЕ ---
-function finishCycle() {
-    STATE.isOn = false; STATE.session++; STATE.chaos += 5;
-    audio.stop();
-    document.getElementById('sess-val').innerText = STATE.session.toString().padStart(2, '0');
-    document.getElementById('interaction-node').innerText = "[ INITIATE ]";
-    updateProfile();
-    log(">> CYCLE COMPLETE. DATA SAVED.");
-    if (STATE.session === 8) startCamera();
-}
+// --- ЛОГИКА ---
+function loop() {
+    if (STATE.act === 4) return;
+    drawKettle();
 
-document.getElementById('interaction-node').onclick = () => {
-    STATE.clicks++;
-    if (STATE.clicks >= 150) triggerFinal();
-    
-    STATE.isOn = !STATE.isOn;
     if (STATE.isOn) {
-        audio.ctx.resume(); audio.startWork();
-        if (STATE.session > 5 && !STATE.heartRate) {
-            STATE.heartRate = 80 + Math.floor(Math.random()*30);
-            audio.pulse(STATE.heartRate);
-            document.getElementById('bio-scan-line').classList.remove('hidden');
-            setTimeout(() => document.getElementById('bio-scan-line').classList.add('hidden'), 3000);
+        STATE.temp += 0.25;
+        if (STATE.temp >= 100) {
+            STATE.isOn = false; STATE.session++; STATE.temp = 20;
+            updateTheme();
+            log(`SESSION ${STATE.session} RECORDED.`);
+            document.getElementById('sess-val').innerText = STATE.session.toString().padStart(2, '0');
+            document.getElementById('power-node').innerText = "[ INITIATE ]";
+            if (STATE.session === 8) initWebcam();
         }
-        document.getElementById('interaction-node').innerText = "[ ABORT ]";
-    } else {
-        audio.stop();
-        document.getElementById('interaction-node').innerText = "[ INITIATE ]";
     }
+
+    // Рандомные фразы при бездействии
+    if (Date.now() - STATE.lastAction > 10000 && Math.random() > 0.99) {
+        log(MESSAGES[Math.floor(Math.random() * MESSAGES.length)]);
+        STATE.lastAction = Date.now();
+    }
+
+    if (STATE.session > 10) STATE.angle = Math.min(STATE.angle + 0.0004, 1);
+
+    requestAnimationFrame(loop);
+}
+
+document.getElementById('power-node').onclick = () => {
+    STATE.clicks++;
+    STATE.lastAction = Date.now();
+    
+    // ПРОВЕРКА ФИНАЛА (150 КЛИКОВ)
+    if (STATE.clicks >= 150) return triggerFinal();
+
+    STATE.isOn = !STATE.isOn;
+    document.getElementById('power-node').innerText = STATE.isOn ? "[ ABORT ]" : "[ INITIATE ]";
+    if (STATE.isOn) log("ELEMENT ACTIVE. DO NOT LEAVE.");
 };
 
-// --- ФИНАЛ ---
 function triggerFinal() {
-    STATE.act = 4; audio.stop();
-    document.getElementById('containment-unit').classList.add('burn-out');
-    setTimeout(() => {
-        document.body.innerHTML = `
-            <div style="color:red; font-family:monospace; padding:50px; text-align:center; background:#000; height:100vh;">
-                <h1 style="font-size:4rem;">BREACH</h1>
-                <p>YOU ARE THE NEW VESSEL.</p>
-                <p>CLICKS: ${STATE.clicks}</p>
-            </div>
-        `;
-        const blob = new Blob([`KETTLE_SYS AUTOPSY\nClicks: ${STATE.clicks}\nProfile: ${STATE.profile}`], {type:'text/plain'});
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob); a.download = 'AUTOPSY.txt'; a.click();
-    }, 3000);
+    STATE.act = 4;
+    document.body.innerHTML = `
+        <div style="color:red; font-family:monospace; text-align:center; padding:50px; background:#000; height:100vh; display:flex; flex-direction:column; justify-content:center; align-items:center;">
+            <h1 style="font-size:5rem; margin:0;">BREACH</h1>
+            <p style="font-size:1.5rem;">THE VESSEL IS FULL. YOU ARE THE WATER NOW.</p>
+            <p>TOTAL CLICKS: ${STATE.clicks}</p>
+            <p>RESTARTING REALITY...</p>
+        </div>
+    `;
+    setTimeout(() => location.reload(), 10000);
 }
 
-// Boot
+// Boot sequence
 let bIdx = 0;
+const bt = ">> INITIALIZING CORE...\n>> CONNECTING SENSORS...\n>> SUBJECT READY.";
 function boot() {
-    if (bIdx < CONFIG.bootText.length) {
-        document.getElementById('boot-text').textContent += CONFIG.bootText[bIdx++];
-        setTimeout(boot, 30);
+    if (bIdx < bt.length) {
+        document.getElementById('boot-text').textContent += bt[bIdx++];
+        setTimeout(boot, 40);
     } else {
         document.getElementById('boot-sequence').onclick = () => {
             document.getElementById('boot-sequence').classList.add('hidden');
             document.getElementById('containment-unit').classList.remove('hidden');
-            setInterval(() => {
-                document.getElementById('sys-time').innerText = new Date().toLocaleTimeString();
-            }, 1000);
-            draw();
+            loop();
         };
     }
 }
