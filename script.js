@@ -177,7 +177,7 @@ function finishCycle() {
 
 document.getElementById('interaction-node').onclick = () => {
     STATE.clicks++;
-    if (STATE.clicks >= 666) triggerFinal();
+    if (STATE.clicks >= 150) triggerFinal();
     
     STATE.isOn = !STATE.isOn;
     if (STATE.isOn) {
