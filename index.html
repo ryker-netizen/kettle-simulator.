@@ -2,50 +2,28 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KETTLE_SYS</title>
+    <title>KETTLE.EXE — THE FINAL VERSION</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div id="scan-lines"></div>
     <div id="vignette"></div>
-    <div id="noise-overlay"></div>
-
     <div id="boot-sequence">
-        <div id="boot-text" class="terminal-font"></div>
-        <div id="boot-cursor" class="blink">_</div>
+        <div id="boot-text"></div>
     </div>
 
     <div id="containment-unit" class="hidden">
         <header>
-            <div class="meta-data">
-                <span id="session-id">SESSION: <span id="sess-val">01</span></span>
-                <span id="sys-time">00:00:00</span>
-            </div>
-            <div id="profile-block">
-                STATUS: <span id="user-profile" class="stable">NEUROTYPICAL</span>
-            </div>
+            <div class="stats">SESSION: <span id="sess-val">01</span> | TIME: <span id="sys-time">00:00</span></div>
+            <div id="status-tag">STATUS: <span id="user-profile">STABLE</span></div>
         </header>
 
-        <main>
-            <div class="canvas-container">
-                <canvas id="bio-screen" width="500" height="500"></canvas>
-                <div id="bio-scan-line" class="hidden"></div>
-            </div>
-            
-            <div class="status-feed">
-                <div id="log-feed">>> SYSTEM READY.</div>
-            </div>
+        <div class="canvas-wrap">
+            <canvas id="main-frame" width="500" height="500"></canvas>
+            <div id="scan-line"></div>
+        </div>
 
-            <div class="controls">
-                <button id="interaction-node" class="neuro-btn">[ INITIATE ]</button>
-            </div>
-        </main>
-    </div>
-
-    <div id="reality-failure" class="hidden">
-        <p>SYSTEM_THREAD_EXCEPTION_NOT_HANDLED (ktl.sys)</p>
-        <p>Fatal Error: User Reality Desynchronized</p>
+        <div id="message-log">>> SYSTEM READY.</div>
+        <button id="power-node">[ INITIATE ]</button>
     </div>
 
     <script src="script.js"></script>
